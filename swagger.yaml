@@ -13,6 +13,11 @@ basePath: "/v1"
 
 schemes:
   - "https"
+securityDefinitions:
+  Bearer:
+    type: apiKey
+    name: Authorization
+    in: header
 consumes:
   - "application/json"
 produces:
@@ -24,16 +29,52 @@ paths:
       - "questions"
       summary: "Finds questions."
       operationId: "findQuestions"
+      description: |
+        This endpoint is the workhorse and primary purpose of this API.
+
+        A simple, bare request to `/questions` returns a handful of the most recently used question/answer pairs.
+        Including a `question` parameter will find question/answer pairs that match the provided `question`:
+        ```
+        /questions/?question=why%20did%20the%20chicken%20cross%20the%20road
+        # Return question/answer pairs which have been found "helpful" in answering
+        # why the chicken crossed the road.
+        ```
+
+        Additional parameters help refine the algorithm which returns these pairs:
+        ```
+        /questions/?question=why%20did%20the%20chicken%20cross%20the%20road
+                   &recency[]=P7D
+                   &recency-weight[]=500
+                   &recency[]=P100Y
+                   &recency-weight[]=10
+        # Gives 50 times the weight received from "helpfulness" feedback received in the last 7 days vs
+        # feedback received in the last 100 years. The strings 'P7D' and 'P100Y' represent 7 days and 100
+        # years respectively in ISO 8601 format.
+        ```
+
+        Context 'tags' provide contextualization:
+        ```
+        /questions/?question=where%20is%20your%20office%20located
+                   &context[]=http%3A%2F%2Fmedicalservices.example%2FDentalOffice
+        # -vs-
+        /questions/?question=where%20is%20your%20office%20located
+                   &context[]=http%3A%2F%2Fmedicalservices.example%2FOptometryOffice
+        ```
+
+        And you can choose how the algorithm weights its choices between context, recency, question match, and
+        feedback strength using the `weight` parameters.
+      security:
+        - Bearer: []
       parameters:
-        - name: "question"
-          in: "query"
-          required: false
-          type: "string"
         - name: "max"
           in: "query"
           description: "Maximum number of questions to return."
           required: false
           type: "integer"
+        - name: "question"
+          in: "query"
+          required: false
+          type: "string"
         - name: "match-weight"
           in: "query"
           required: false
@@ -81,6 +122,8 @@ paths:
       summary: "Add a new question"
       description: ""
       operationId: "addQuestion"
+      security:
+        - Bearer: []
       parameters:
         - in: formData
           name: "question"
@@ -93,8 +136,10 @@ paths:
           required: true
           type: "string"
       responses:
-        405:
-          description: "Invalid input"
+        200:
+          description: OK - The question object
+          schema:
+            $ref: '#/definitions/Question'
   /questions/{question_id}/:
     patch:
       tags:
@@ -102,6 +147,8 @@ paths:
       summary: "Update an existing question"
       description: ""
       operationId: "updateQuestion"
+      security:
+        - Bearer: []
       parameters:
         - name: "question_id"
           in: "query"
@@ -117,6 +164,11 @@ paths:
           description: "Body of accompanying answer"
           required: false
           type: "string"
+      responses:
+        200:
+          description: OK - The question object
+          schema:
+            $ref: '#/definitions/Question'
   /feedback/:
     post:
       tags:
@@ -124,6 +176,8 @@ paths:
       summary: "Provide feedback on a question"
       description: ""
       operationId: "provideFeedback"
+      security:
+        - Bearer: []
       parameters:
         - name: "question_id"
           in: formData
@@ -138,3 +192,63 @@ paths:
           description: "Strength and valence of feedback"
           required: true
           type: "integer"
+      responses:
+        200:
+          description: OK - Feedback Recorded.
+  /auth/admin/:
+    get:
+      tags:
+      - "auth"
+      summary: "Get an admin token."
+      description: "This endpoint grants anyone who accesses it an admin token. You should protect this endpoint \
+      \ behind an authentication system, but the exact nature of that authentication system is unspecificied in \
+      \ this API specification."
+      operationId: "getAdminToken"
+      responses:
+        200:
+          description: OK - Token Granted.
+          schema:
+            type: object
+            properties:
+              expiration:
+                type: string
+                example: 2015-09-14T09:45:19+00:00
+              token:
+                type: string
+                example: 912ec803b2ce49e4a541068d495ab570
+  /auth/client/:
+    post:
+      tags:
+      - "auth"
+      summary: "Create a client token."
+      operationId: "getClientToken"
+      security:
+        - Bearer: []
+      parameters:
+        - name: "question"
+          in: "formData"
+          required: true
+          type: "string"
+      responses:
+        200:
+          description: OK - Successfully created.
+          schema:
+            type: object
+            properties:
+              token:
+                type: string
+                example: 912ec803b2ce49e4a541068d495ab570
+definitions:
+  Question:
+    description: The client accessing the API
+    type: object
+    properties:
+      id:
+        type: string
+        example: t6y4zo26vutj4xclh5hpy3sc5m
+      question:
+        type: string
+        example: "Why did the chicken cross the road?"
+      answer:
+        type: string
+        example: "To get to the other side."
