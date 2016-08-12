@@ -179,19 +179,26 @@ paths:
       security:
         - Bearer: []
       parameters:
-        - name: "question_id"
+        - name: "question-id"
           in: formData
           required: true
           type: "integer"
         - in: formData
           name: "question"
-          required: true
+          description: "The question as asked by the visitor"
+          required: false
           type: "string"
         - in: formData
           name: "magnitude"
           description: "Strength and valence of feedback"
-          required: true
+          required: false
           type: "integer"
+        - name: "context[]"
+          in: "query"
+          required: false
+          type: "array"
+          items:
+            type: "string"
       responses:
         200:
           description: OK - Feedback Recorded.
